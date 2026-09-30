@@ -6,4 +6,4 @@ download.file(
   mode = "wb"
 )
 
-source(tmp)
+source(tmp, echo = TRUE)
