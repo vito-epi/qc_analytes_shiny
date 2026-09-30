@@ -228,7 +228,7 @@ server <- function(input, output, session) {
     req(qc_objects(), input$matrix)
     choices_df <- biomarker_choices()
     if (nrow(choices_df) == 0) {
-      updateSelectizeInput(session, "biomarker", choices = character(), selected = character(), server = FALSE)
+      updateSelectizeInput(session, "biomarker", choices = character(), selected = character(), server = TRUE)
       return()
     }
     choices <- setNames(choices_df$BaseVarname, choices_df$display_label)
@@ -298,7 +298,15 @@ server <- function(input, output, session) {
   })
   output$summary_table <- renderUI({
     s <- current_qc(); pct_ok <- isTRUE(s$Pct_detected[[1]] >= 30); unique_ok <- isTRUE(s$N_unique_detected[[1]] >= 10); imp_expected <- isTRUE(s$IMP_expected[[1]])
-    tagList(h4("Imputation criteria"), tags$p(tags$b("Detected values: "), s$N_detected[[1]]), tags$p(tags$b("% above LOD/LOQ (>=30%): "), tags$span(style = if (pct_ok) "color:darkgreen;font-weight:bold;" else "color:red;font-weight:bold;", format_percentage(s$Pct_detected[[1]]))), tags$p(tags$b("Unique detected values (>=10): "), tags$span(style = if (unique_ok) "color:darkgreen;font-weight:bold;" else "color:red;font-weight:bold;", s$N_unique_detected[[1]])), tags$p(tags$b("IMP expected: "), ifelse(imp_expected, "YES", "NO")), tags$p(tags$b("Overall QC status: "), tags$span(style = paste0("color:", overall_status_colour(s$Overall_QC_Status[[1]]), ";font-weight:bold;"), s$Overall_QC_Status[[1]])))
+    tagList(h4("Imputation criteria"),tags$p(
+      tags$b("N values above LOD/LOQ: "),
+      paste0(
+        s$N_detected[[1]],
+        " of ",
+        s$N_non_missing[[1]],
+        " records"
+      )
+    ), tags$p(tags$b("% above LOD/LOQ (>=30%): "), tags$span(style = if (pct_ok) "color:darkgreen;font-weight:bold;" else "color:red;font-weight:bold;", format_percentage(s$Pct_detected[[1]]))), tags$p(tags$b("Unique values above LOD/LOQ (>=10): "), tags$span(style = if (unique_ok) "color:darkgreen;font-weight:bold;" else "color:red;font-weight:bold;", s$N_unique_detected[[1]])), tags$p(tags$b("IMP expected: "), ifelse(imp_expected, "YES", "NO")), tags$p(tags$b("Overall QC status: "), tags$span(style = paste0("color:", overall_status_colour(s$Overall_QC_Status[[1]]), ";font-weight:bold;"), s$Overall_QC_Status[[1]])))
   })
   output$continuous_summary_table <- renderTable({
     out <- current_summary_statistics() %>% filter(vartype %in% c("raw", "imp", "meb")); validate(need(nrow(out) > 0, "No continuous summary statistics available."))
@@ -310,7 +318,9 @@ server <- function(input, output, session) {
   }, striped = TRUE, bordered = TRUE, spacing = "xs", width = "100%", na = "")
   output$qc_info <- renderUI({
     s <- current_qc(); ev <- selected_variables(); imp_lines <- make_qc_lines(ev, s, imputation_mapping); corr_lines <- make_qc_lines(ev, s, correction_mapping)
-    tagList(h4("QC summary"), tags$p(tags$b("Imputed observations: "), paste0(s$N_imputed[[1]], " (", format_percentage(s$Pct_imputed[[1]]), ")")), tags$p(tags$b("Censored observations: "), paste0(s$N_censored[[1]], " (", format_percentage(s$Pct_non_detected[[1]]), ")")), h5("Imputation variables"), if (length(imp_lines) > 0) tags$ul(imp_lines) else tags$p("No imputation variables defined."), h5("Correction variables"), if (length(corr_lines) > 0) tags$ul(corr_lines) else tags$p("No correction variables defined."))
+    tagList(h4("QC summary"), 
+            # tags$p(tags$b("Imputed observations: "), paste0(s$N_imputed[[1]], " (", format_percentage(s$Pct_imputed[[1]]), ")")), 
+            tags$p(tags$b("Censored observations: "), paste0(s$N_censored[[1]], " (", format_percentage(s$Pct_non_detected[[1]]), ")")), h5("Imputation variables"), if (length(imp_lines) > 0) tags$ul(imp_lines) else tags$p("No imputation variables defined."), h5("Correction variables"), if (length(corr_lines) > 0) tags$ul(corr_lines) else tags$p("No correction variables defined."))
   })
   output$lod_loq_message <- renderUI({
     s <- current_qc(); out <- current_lod_loq()
