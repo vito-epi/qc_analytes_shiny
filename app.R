@@ -168,18 +168,47 @@ server <- function(input, output, session) {
         )
       ),
       column(9,
-        tabsetPanel(
-          tabPanel("QC Summary", br(), fluidRow(
-            column(6,
-              div(class = "compact-card", uiOutput("summary_table")),
-              div(class = "compact-card summary-stats-table", h4("Summary statistics"), h5("Continuous variables"), tableOutput("continuous_summary_table"), tags$hr(style = "margin:12px 0;"), h5("Detection variable"), tableOutput("bin_summary_table")),
-              div(class = "compact-card", uiOutput("qc_info"))
-            ),
-            column(6,
-              div(class = "compact-card", h4("LOD / LOQ"), uiOutput("lod_loq_message"), tableOutput("lod_loq_table")),
-              div(class = "compact-card", uiOutput("integrity_overview"))
-            )
-          )),
+             tabsetPanel(
+             tabPanel("QC Summary", br(), fluidRow(
+               
+               column(6,
+                      div(class = "compact-card",
+                          uiOutput("summary_table")
+                      ),
+                      
+                      div(class = "compact-card summary-stats-table",
+                          h4("Summary statistics"),
+                          h5("Continuous variables"),
+                          tableOutput("continuous_summary_table"),
+                          tags$hr(style = "margin:12px 0;"),
+                          h5("Detection variable"),
+                          tableOutput("bin_summary_table")
+                      ),
+                      
+                      div(class = "compact-card",
+                          uiOutput("qc_info")
+                      )
+               ),
+               
+               column(6,
+                      div(class = "compact-card",
+                          h4("LOD / LOQ"),
+                          uiOutput("lod_loq_message"),
+                          tableOutput("lod_loq_table")
+                      ),
+                      
+                      div(class = "compact-card",
+                          uiOutput("integrity_overview")
+                      ),
+                      
+                      div(class = "compact-card",
+                          h4("Distribution QC"),
+                          plotOutput("qq_plot_summary",
+                                     height = "300px")
+                      )
+               )
+               
+             )),
           tabPanel("Plots", br(), fluidRow(column(6, plotOutput("hist_plot", height = "380px")), column(6, plotOutput("density_plot", height = "380px"))), fluidRow(column(6, plotOutput("qq_plot", height = "380px")))),
           tabPanel("All biomarkers", br(), DTOutput("overview_table"))
         )
@@ -368,6 +397,61 @@ server <- function(input, output, session) {
     validate(need(nrow(d) >= 10, "Too few positive non-missing observations."), need(nrow(ref) == 1, "No Q-Q reference line available."))
     ggplot(d, aes(x = theoretical, y = log_value, colour = source)) + geom_point(size = 2, alpha = 0.8) + geom_abline(slope = ref$qq_slope[[1]], intercept = ref$qq_intercept[[1]], colour = "black", linewidth = 1) + scale_colour_manual(values = c(Measured = "#2C7FB8", Imputed = "#D95F0E"), drop = FALSE) + theme_minimal() + labs(title = paste0("Normal Q-Q assessment of log(", input$biomarker, "_imp)"), x = "Theoretical normal quantiles", y = "Sample quantiles", colour = NULL)
   })
+  output$qq_plot_summary <- renderPlot({
+    
+    d <- current_qq_data()
+    ref <- current_qq_reference()
+    
+    validate(
+      need(
+        nrow(d) >= 10,
+        "Too few positive non-missing observations."
+      ),
+      need(
+        nrow(ref) == 1,
+        "No Q-Q reference line available."
+      )
+    )
+    
+    ggplot(
+      d,
+      aes(
+        x = theoretical,
+        y = log_value,
+        colour = source
+      )
+    ) +
+      geom_point(
+        size = 2,
+        alpha = 0.8
+      ) +
+      geom_abline(
+        slope = ref$qq_slope[[1]],
+        intercept = ref$qq_intercept[[1]],
+        colour = "black",
+        linewidth = 1
+      ) +
+      scale_colour_manual(
+        values = c(
+          Measured = "#2C7FB8",
+          Imputed = "#D95F0E"
+        ),
+        drop = FALSE
+      ) +
+      theme_minimal() +
+      labs(
+        title = paste0(
+          "Normal Q-Q assessment of log(",
+          input$biomarker,
+          "_imp)"
+        ),
+        x = "Theoretical normal quantiles",
+        y = "Sample quantiles",
+        colour = NULL
+      )
+    
+  })
+  
 }
 
 shinyApp(ui = ui, server = server)
