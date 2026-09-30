@@ -127,24 +127,25 @@ A potential issue was detected.
 
 Examples:
 
-- Partial completion of an expected `_imp` variable
-- Observations with raw measurements but missing both LOD and LOQ information
-
 Warnings should be reviewed but do not necessarily invalidate the biomarker.
+Currently, all issues are registered as FAIL
+
 
 ## FAIL
 
-A critical QC issue was detected.
+A FAIL indicates that one or more QC requirements were not met.
 
-Examples:
+Examples include:
 
-- Missing mandatory derived variables
-- Incomplete `_meb` variables
-- Incomplete `_bin` variables
-- Missing expected imputations
-- Integrity failures in `_imp` or `_meb`
+- An expected `_imp` variable is missing, empty or only partially populated.
+- A `_meb` variable is missing, empty or only partially populated.
+- A `_bin` variable is missing, empty or only partially populated.
+- A measured observation has no corresponding non-missing value in `_imp` or `_meb`.
+- A censored observation has not been imputed in `_imp` when imputation is expected.
+- A censored observation has not been substituted in `_meb`.
+- A raw biomarker value is present while both the corresponding LOD and LOQ values are missing.
 
-Failures should be resolved before further analyses.
+Biomarkers with a FAIL status should be investigated and corrected before further analysis.
 
 ---
 
