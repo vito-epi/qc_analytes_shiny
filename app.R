@@ -113,7 +113,7 @@ ui <- fluidPage(
     .summary-stats-table table {font-size:12px;margin-bottom:0;}
     .summary-stats-table th,.summary-stats-table td {padding:5px !important;}
   "))),
-  titlePanel("Biomonitoring QC Dashboard"),
+  titlePanel("QC Dashboard of analyte data"),
   uiOutput("app_ui")
 )
 
