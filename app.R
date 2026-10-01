@@ -201,16 +201,65 @@ server <- function(input, output, session) {
                           uiOutput("integrity_overview")
                       ),
                       
-                      div(class = "compact-card",
-                          h4("Distribution QC"),
-                          plotOutput("qq_plot_summary",
-                                     height = "300px")
+                      # div(class = "compact-card",
+                      #     h4("Distribution QC"),
+                      #     plotOutput("qq_plot_summary",
+                      #                height = "300px")
+                      # )
+                      div(
+                        class = "compact-card",
+                        
+                        h4("Distribution QC"),
+                        
+                        fluidRow(
+                          
+                          column(
+                            6,
+                            plotOutput(
+                              "distribution_plot_summary",
+                              height = "280px"
+                            )
+                          ),
+                          
+                          column(
+                            6,
+                            plotOutput(
+                              "qq_plot_summary",
+                              height = "280px"
+                            )
+                          )
+                          
+                        )
                       )
+                      
                )
                
              )),
-          tabPanel("Plots", br(), fluidRow(column(6, plotOutput("hist_plot", height = "380px")), column(6, plotOutput("density_plot", height = "380px"))), fluidRow(column(6, plotOutput("qq_plot", height = "380px")))),
-          tabPanel("All biomarkers", br(), DTOutput("overview_table"))
+             # tabPanel(
+             #   "Plots",
+             #   br(),
+             #   
+             #   fluidRow(
+             #     column(
+             #       12,
+             #       plotOutput(
+             #         "distribution_plot",
+             #         height = "420px"
+             #       )
+             #     )
+             #   ),
+             #   
+             #   fluidRow(
+             #     column(
+             #       12,
+             #       plotOutput(
+             #         "qq_plot",
+             #         height = "420px"
+             #       )
+             #     )
+             #   )
+             # ),
+             tabPanel("All biomarkers", br(), DTOutput("overview_table"))
         )
       )
     )
@@ -384,14 +433,394 @@ server <- function(input, output, session) {
     out <- filtered_biomarkers() %>% arrange(factor(Overall_QC_Status, levels = c("FAIL", "WARNING", "PASS")), BaseVarname) %>% select(BaseVarname, Description, Unit, N_total, N_non_missing, N_detected, Pct_detected, N_unique_detected, IMP_expected, N_censored, N_imputed, Pct_imputed, N_lod_loq_combinations, Warning_missing_LOD_LOQ, imp_status, IMP_integrity_status, meb_status, MEB_integrity_status, bin_status, Overall_QC_Status)
     datatable(out, rownames = FALSE, filter = "top", options = list(pageLength = 25, scrollX = TRUE)) %>% formatStyle("Overall_QC_Status", color = styleEqual(c("PASS", "WARNING", "FAIL"), c("darkgreen", "#E69F00", "red")), fontWeight = "bold")
   })
-  output$hist_plot <- renderPlot({
-    d <- current_plot_data(); validate(need(nrow(d) > 0, "No positive measured or imputed values available."))
-    ggplot(d, aes(x = value, fill = source)) + geom_histogram(alpha = 0.5, bins = 30, position = "identity") + scale_x_log10() + scale_fill_manual(values = c(Measured = "#2C7FB8", Imputed = "#D95F0E"), drop = FALSE) + theme_minimal() + labs(title = paste0(input$biomarker, ": measured versus imputed values"), x = "Value (log scale)", y = "Count", fill = NULL)
+  # output$hist_plot <- renderPlot({
+  #   d <- current_plot_data(); validate(need(nrow(d) > 0, "No positive measured or imputed values available."))
+  #   ggplot(d, aes(x = value, fill = source)) + geom_histogram(alpha = 0.5, bins = 30, position = "identity") + scale_x_log10() + scale_fill_manual(values = c(Measured = "#2C7FB8", Imputed = "#D95F0E"), drop = FALSE) + theme_minimal() + labs(title = paste0(input$biomarker, ": measured versus imputed values"), x = "Value (log scale)", y = "Count", fill = NULL)
+  # })
+  # output$density_plot <- renderPlot({
+  #   d <- current_distribution_data(); validate(need(nrow(d) >= 10, paste0("Too few positive non-missing observations in ", input$biomarker, "_imp.")))
+  #   ggplot(d, aes(x = value)) + geom_density(fill = "#8E63CE", colour = "#8E63CE", alpha = 0.3, linewidth = 1) + scale_x_log10() + theme_minimal() + labs(title = paste0("Full distribution of ", input$biomarker, "_imp"), x = paste0(input$biomarker, "_imp (log scale)"), y = "Density")
+  # })
+  output$distribution_plot <- renderPlot({
+    
+    grouped_data <- current_plot_data()
+    full_data <- current_distribution_data()
+    
+    validate(
+      need(
+        nrow(grouped_data) > 0,
+        "No positive measured or imputed values available."
+      ),
+      need(
+        nrow(full_data) >= 10,
+        paste0(
+          "Too few positive non-missing observations in ",
+          input$biomarker,
+          "_imp."
+        )
+      )
+    )
+    
+    grouped_data <- grouped_data %>%
+      filter(
+        is.finite(value),
+        value > 0,
+        source %in% c("Measured", "Imputed")
+      ) %>%
+      mutate(
+        log_value = log10(value),
+        source = factor(
+          source,
+          levels = c("Measured", "Imputed")
+        )
+      )
+    
+    full_data <- full_data %>%
+      filter(
+        is.finite(value),
+        value > 0
+      ) %>%
+      mutate(
+        log_value = log10(value)
+      )
+    
+    validate(
+      need(
+        nrow(grouped_data) > 0,
+        "No positive measured or imputed values available."
+      ),
+      need(
+        nrow(full_data) >= 10,
+        "Too few positive non-missing values for the full distribution."
+      ),
+      need(
+        dplyr::n_distinct(full_data$log_value) >= 2,
+        "At least two distinct positive values are needed for a density curve."
+      )
+    )
+    
+    number_of_bins <- 30
+    
+    log_range <- range(
+      c(
+        grouped_data$log_value,
+        full_data$log_value
+      ),
+      finite = TRUE
+    )
+    
+    bin_width <- diff(log_range) / number_of_bins
+    
+    validate(
+      need(
+        is.finite(bin_width) && bin_width > 0,
+        "Insufficient variation to construct a distribution plot."
+      )
+    )
+    
+    density_estimate <- density(
+      full_data$log_value,
+      from = log_range[[1]],
+      to = log_range[[2]],
+      n = 512,
+      na.rm = TRUE
+    )
+    
+    density_data <- tibble(
+      log_value = density_estimate$x,
+      count = density_estimate$y *
+        nrow(full_data) *
+        bin_width
+    )
+    
+    exponent_min <- floor(log_range[[1]])
+    exponent_max <- ceiling(log_range[[2]])
+    
+    log_breaks <- seq(
+      exponent_min,
+      exponent_max,
+      by = 1
+    )
+    
+    log_labels <- format(
+      10^log_breaks,
+      scientific = FALSE,
+      trim = TRUE,
+      big.mark = ","
+    )
+    
+    ggplot() +
+      
+      geom_histogram(
+        data = grouped_data,
+        aes(
+          x = log_value,
+          fill = source
+        ),
+        bins = number_of_bins,
+        position = "identity",
+        alpha = 0.60,
+        colour = NA
+      ) +
+      
+      geom_line(
+        data = density_data,
+        aes(
+          x = log_value,
+          y = count,
+          colour = "Full distribution"
+        ),
+        linewidth = 1.2
+      ) +
+      
+      scale_fill_manual(
+        values = c(
+          Measured = "#2C7FB8",
+          Imputed = "#D95F0E"
+        ),
+        drop = FALSE
+      ) +
+      
+      scale_colour_manual(
+        values = c(
+          `Full distribution` = "#8E63CE"
+        )
+      ) +
+      
+      scale_x_continuous(
+        breaks = log_breaks,
+        labels = log_labels,
+        expand = expansion(mult = c(0.02, 0.03))
+      ) +
+      
+      scale_y_continuous(
+        expand = expansion(mult = c(0, 0.05))
+      ) +
+      
+      guides(
+        fill = guide_legend(
+          title = NULL,
+          order = 1,
+          override.aes = list(alpha = 0.60)
+        ),
+        colour = guide_legend(
+          title = NULL,
+          order = 2,
+          override.aes = list(linewidth = 1.2)
+        )
+      ) +
+      
+      theme_minimal() +
+      
+      theme(
+        legend.position = "right",
+        panel.grid.minor = element_blank()
+      ) +
+      
+      labs(
+        title = paste0(
+          input$biomarker,
+          ": measured, imputed and full distribution"
+        ),
+        subtitle = paste0(
+          "Bars show measured and imputed observations; ",
+          "the purple line shows the complete ",
+          input$biomarker,
+          "_imp distribution."
+        ),
+        x = "Value (log10 scale)",
+        y = "Count",
+        fill = NULL,
+        colour = NULL
+      )
   })
-  output$density_plot <- renderPlot({
-    d <- current_distribution_data(); validate(need(nrow(d) >= 10, paste0("Too few positive non-missing observations in ", input$biomarker, "_imp.")))
-    ggplot(d, aes(x = value)) + geom_density(fill = "#8E63CE", colour = "#8E63CE", alpha = 0.3, linewidth = 1) + scale_x_log10() + theme_minimal() + labs(title = paste0("Full distribution of ", input$biomarker, "_imp"), x = paste0(input$biomarker, "_imp (log scale)"), y = "Density")
+  
+  
+  output$distribution_plot_summary <- renderPlot({
+    
+    grouped_data <- current_plot_data()
+    full_data <- current_distribution_data()
+    
+    validate(
+      need(
+        nrow(grouped_data) > 0,
+        "No positive measured or imputed values available."
+      ),
+      need(
+        nrow(full_data) >= 10,
+        "Too few positive non-missing observations."
+      )
+    )
+    
+    grouped_data <- grouped_data %>%
+      filter(
+        is.finite(value),
+        value > 0,
+        source %in% c("Measured", "Imputed")
+      ) %>%
+      mutate(
+        log_value = log10(value),
+        source = factor(
+          source,
+          levels = c("Measured", "Imputed")
+        )
+      )
+    
+    full_data <- full_data %>%
+      filter(
+        is.finite(value),
+        value > 0
+      ) %>%
+      mutate(
+        log_value = log10(value)
+      )
+    
+    validate(
+      need(
+        nrow(grouped_data) > 0,
+        "No positive measured or imputed values available."
+      ),
+      need(
+        nrow(full_data) >= 10,
+        "Too few positive non-missing values for the full distribution."
+      ),
+      need(
+        dplyr::n_distinct(full_data$log_value) >= 2,
+        "At least two distinct positive values are needed."
+      )
+    )
+    
+    number_of_bins <- 30
+    
+    log_range <- range(
+      c(
+        grouped_data$log_value,
+        full_data$log_value
+      ),
+      finite = TRUE
+    )
+    
+    bin_width <- diff(log_range) / number_of_bins
+    
+    validate(
+      need(
+        is.finite(bin_width) && bin_width > 0,
+        "Insufficient variation to construct a distribution plot."
+      )
+    )
+    
+    density_estimate <- density(
+      full_data$log_value,
+      from = log_range[[1]],
+      to = log_range[[2]],
+      n = 512,
+      na.rm = TRUE
+    )
+    
+    density_data <- tibble(
+      log_value = density_estimate$x,
+      count = density_estimate$y *
+        nrow(full_data) *
+        bin_width
+    )
+    
+    exponent_min <- floor(log_range[[1]])
+    exponent_max <- ceiling(log_range[[2]])
+    
+    log_breaks <- seq(
+      exponent_min,
+      exponent_max,
+      by = 1
+    )
+    
+    log_labels <- format(
+      10^log_breaks,
+      scientific = FALSE,
+      trim = TRUE,
+      big.mark = ","
+    )
+    
+    ggplot() +
+      
+      geom_histogram(
+        data = grouped_data,
+        aes(
+          x = log_value,
+          fill = source
+        ),
+        bins = number_of_bins,
+        position = "identity",
+        alpha = 0.60,
+        colour = NA
+      ) +
+      
+      geom_line(
+        data = density_data,
+        aes(
+          x = log_value,
+          y = count,
+          colour = "Full distribution"
+        ),
+        linewidth = 1
+      ) +
+      
+      scale_fill_manual(
+        values = c(
+          Measured = "#2C7FB8",
+          Imputed = "#D95F0E"
+        ),
+        drop = FALSE
+      ) +
+      
+      scale_colour_manual(
+        values = c(
+          `Full distribution` = "#8E63CE"
+        )
+      ) +
+      
+      scale_x_continuous(
+        breaks = log_breaks,
+        labels = log_labels,
+        expand = expansion(mult = c(0.02, 0.03))
+      ) +
+      
+      scale_y_continuous(
+        expand = expansion(mult = c(0, 0.05))
+      ) +
+      
+      guides(
+        fill = guide_legend(
+          title = NULL,
+          order = 1,
+          override.aes = list(alpha = 0.60)
+        ),
+        colour = guide_legend(
+          title = NULL,
+          order = 2,
+          override.aes = list(linewidth = 1)
+        )
+      ) +
+      
+      theme_minimal(base_size = 10) +
+      
+      theme(
+        legend.position = "bottom",
+        legend.box = "vertical",
+        legend.spacing.y = unit(0, "pt"),
+        legend.margin = margin(t = 0, r = 0, b = 0, l = 0),
+        panel.grid.minor = element_blank(),
+        plot.margin = margin(5, 5, 5, 5)
+      ) +
+      
+      labs(
+        title = "Measured, imputed and full distribution",
+        x = "Value (log10 scale)",
+        y = "Count",
+        fill = NULL,
+        colour = NULL
+      )
   })
+  
   output$qq_plot <- renderPlot({
     d <- current_qq_data(); ref <- current_qq_reference()
     validate(need(nrow(d) >= 10, "Too few positive non-missing observations."), need(nrow(ref) == 1, "No Q-Q reference line available."))
